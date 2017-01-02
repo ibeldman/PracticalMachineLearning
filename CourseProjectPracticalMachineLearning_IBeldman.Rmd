@@ -1,0 +1,131 @@
+---
+title: "Course Project - Practical Machine Learning"
+author: "Ilse Beldman"
+date: "2 januari 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data
+It's time to load both the training and test data.
+```{r}
+# Load both the training and test data and replace all missing values with "NA"
+trainSet <- read.csv("C:\\Users\\ibeldman\\AppData\\Local\\Temp\\RtmpKWhWSI\\data25e07a1f6ff7", header=TRUE, na.strings=c("NA","#DIV/0!", ""))
+testset <- read.csv("C:\\Users\\ibeldman\\AppData\\Local\\Temp\\RtmpKWhWSI\\data25e032d5676f", header=TRUE, na.strings=c("NA","#DIV/0!", ""))
+
+# Delete columns with all missing values
+trainSet<-trainSet[,colSums(is.na(trainSet)) == 0]
+testset <-testset[,colSums(is.na(testset)) == 0]
+
+# Delete variables that are not useful
+trainSet<-trainSet[,-c(1:7)]
+testset<-testset[,-c(1:7)]
+```
+```{r, eval=FALSE}
+# Dimensions
+dim(trainSet)
+dim(testset)
+head(trainSet)
+head(testset)
+
+```
+
+
+## Model
+The goal is to predict the variable "Classe" from the data. The variable is a factor variable with five levels. The levels represent the five different ways to perform barbell lifts:
+* Class A: exactly according to the specification
+* Class B: throwing the elbows to the front
+* Class C: lifting the dumbbell only halfway
+* Class D: lowering the dumbbell only halfway
+* Class E: throwing the hips to the front
+People who do a specific repetition are executing Class A are doing the movement in the right way. Movements from the other classes are mistakes. 
+The final model should be accurate and have a minimal out of sample error. This report compares two different algorithms: decision tree and random forest.
+
+Before building the model the required packages needs to be installed en in order to guarantee reproduceability the seed need to be set.
+
+```{r}
+##Installing packages
+#install.packages("caret")
+#install.packages("randomForest")
+#install.packages("rpart")
+#install.packages("rpart.plot")
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+##Set the seed
+set.seed(1234)
+```
+
+## Cross Validation
+Cross-validation needs to be used and means random subsampling without replacement of the original data set. The result is a subTrain data set (75% of the original set) and subTest data (25%). Fitting is done by applying the two algorithms on the subTrain data set. And of course, testing can be executed by applying the model on the subTest data set. 
+```{r}
+subsamples <- createDataPartition(y=trainSet$classe, p=0.75)[[1]]
+subTrain <- trainSet[subsamples,]  
+subTest <- trainSet[-subsamples,] 
+```
+Let 's make a bar plot of the subTrain set.
+
+```{r}
+plot(subTrain$classe, col="red", main="The Classe Levels within the subTrain Data Set", xlab="Classe levels", ylab="Frequency")
+```
+As one can observe the classe level A shows the most occurences within the subTrain data set.
+
+## Decision Tree Model
+Decision Tree algorithm is created by the following code:
+```{r}
+#Create a model with the subTrain data set
+DTmodel <- rpart(classe ~ ., data=subTrain, method="class")
+
+# Use the subTest data set to predict
+predDTmodel <- predict(DTmodel, subTest, type = "class")
+
+# Plot of the Decision Tree
+rpart.plot(DTmodel, main="Decision Tree", extra=102, under=TRUE, faclen=0)
+```
+## Random Forest Model
+```{r}
+#Create a model with the subTrain data set
+RFmodel <- randomForest(classe ~. , data=subTrain, method="class")
+
+# Use the subTest data set to predict
+predRFmodel <- predict(RFmodel, subTest, type = "class")
+```
+
+## Expected Out of Sample Error
+The expected out of sample error is a metric of the function 1 minus Accuracy or the ratio between the expected number of missclassified observations and the total number of observations. This will follow from the subTest set.
+
+```{r}
+## Accuracy Decision Tree
+confusionMatrix(predDTmodel, subTest$classe)
+## Accuracy Random Forest
+confusionMatrix(predRFmodel, subTest$classe)
+```
+The 1-accuracy of the Decision Tree algorithm is equal to 0.996 (95% Confidence Interval:(0.9985, 1)). The results of the Random Forest algorithm show a value of 1 (95% Confidence Interval:(0.9992, 1)). It can be concluded that the Random Forest algorithm is more accurate with an out of sample error equal to 0.0015 (1-Accuracy).
+
+## Choices
+Since the outcome variable is an unordered factor variable the error type metric could be equal to 1 - Accuracy. Cross validation can be used sinse the sample size of the trainset is large (N=196222). 
+
+## Prepare Submission
+```{r}
+#  Writing files for submission
+pml_write_files = function(x){
+n = length(x)
+for(i in 1:n){
+filename = paste0("problem_id_",i,".txt")
+write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+}
+}
+#  Random Forest Model with testset
+results <- predict(DTmodel, newdata=testset, type="class")
+results
+pml_write_files(results)
+
+```
+
